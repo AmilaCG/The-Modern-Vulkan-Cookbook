@@ -98,7 +98,9 @@ class AsyncDataUploader {
     int index;
   };
 
-  void startProcessing();
+  void startLoadingTexturesToGPU();
+
+  void processLoadedTextures();
 
   void queueTextureUploadTasks(const TextureLoadTask& textureLoadTask);
 
