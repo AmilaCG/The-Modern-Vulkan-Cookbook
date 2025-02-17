@@ -182,10 +182,11 @@ int main(int argc, char* argv[]) {
       EngineCore::GLBLoader glbLoader;
       bistro =
           glbLoader.load("resources/assets/Bistro.glb", pool, glbTextureDataLoadedCB);
+      textures.resize(bistro->textures.size(), emptyTexture);
+      pool.unpause();
       TracyVkZone(tracyCtx_, commandBuffer, "Model upload");
       EngineCore::convertModel2OneBuffer(context, commandMgr, commandBuffer,
                                          *bistro.get(), buffers, samplers);
-      textures.resize(bistro->textures.size(), emptyTexture);
       numMeshes = bistro->meshes.size();
     }
 
@@ -356,8 +357,7 @@ int main(int argc, char* argv[]) {
   TracyPlotConfig("Swapchain image index", tracy::PlotFormatType::Number, true, false,
                   tracy::Color::Aqua);
 
-  dataUploader.startProcessing();
-  pool.unpause();
+  dataUploader.startLoadingTexturesToGPU();
 
   while (!glfwWindowShouldClose(window_)) {
     const auto now = glfwGetTime();
@@ -368,6 +368,8 @@ int main(int argc, char* argv[]) {
       previousFrame = frame;
       time = now;
     }
+
+    dataUploader.processLoadedTextures();
 
     const auto texture = context.swapchain()->acquireImage();
     const auto index = context.swapchain()->currentImageIndex();

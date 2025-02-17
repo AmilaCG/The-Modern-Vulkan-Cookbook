@@ -10,20 +10,20 @@ AsyncDataUploader::AsyncDataUploader(VulkanCore::Context& context,
       transferCommandQueueMgr_(context.createTransferCommandQueue(
           1, 1, "secondary thread transfer command queue")),
       graphicsCommandQueueMgr_(context.createGraphicsCommandQueue(
-          1, 1, "secondary thread graphics command queue", 1)),
+          1, 1, "secondary thread graphics command queue")),
       textureReadyCallback_(textureReadyCallback) {}
 
 AsyncDataUploader::~AsyncDataUploader() {
   closeThreads_ = true;
   textureGPUDataUploadThread_.join();
-  textureMipGenThread_.join();
+  //textureMipGenThread_.join();
 
   for (auto& semaphore : semaphores_) {
     vkDestroySemaphore(context_.device(), semaphore, nullptr);
   }
 }
 
-void AsyncDataUploader::startProcessing() {
+void AsyncDataUploader::startLoadingTexturesToGPU() {
   // should be able to replace this with BS_Thread_pool
   textureGPUDataUploadThread_ = std::thread([this]() {
     while (!closeThreads_) {
@@ -69,9 +69,11 @@ void AsyncDataUploader::startProcessing() {
     }
   });
 
-  textureMipGenThread_ = std::thread([this]() {
-    while (!closeThreads_) {
-      if (textureMipGenerationTasks_.size() > 0) {
+}
+
+void AsyncDataUploader::processLoadedTextures() {
+
+    if (textureMipGenerationTasks_.size() > 0) {
         // pop &  do stuff
         auto task = textureMipGenerationTasks_.front();
         textureMipGenerationTasks_.pop_front();
@@ -81,6 +83,7 @@ void AsyncDataUploader::startProcessing() {
                                         transferCommandQueueMgr_.queueFamilyIndex(),
                                         graphicsCommandQueueMgr_.queueFamilyIndex());
         task.texture->generateMips(commandBuffer);
+
 
         graphicsCommandQueueMgr_.endCmdBuffer(commandBuffer);
         VkPipelineStageFlags flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -93,9 +96,8 @@ void AsyncDataUploader::startProcessing() {
         semaphores_.push_back(task.graphicsSemaphore);
 
         textureReadyCallback_(task.index, 0);
-      }
     }
-  });
+    graphicsCommandQueueMgr_.waitUntilSubmitIsComplete();
 }
 
 void AsyncDataUploader::queueTextureUploadTasks(const TextureLoadTask& textureLoadTask) {
